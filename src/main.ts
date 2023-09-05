@@ -1,1 +1,2 @@
-import './reactive/effect'
+import './reactivity/index'
+
