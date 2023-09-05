@@ -21,7 +21,6 @@ function createGetter(isReadonly = false, shallow = false) {
         if (isObject(res)) { // 嵌套 递归的执行Reactive
             return isReadonly ? readonly(res as Object) : reactive(res as Object)
         }
-
         if (!isReadonly) { //如果是只读类型就不收集
             // 依赖收集
             track(target, key)

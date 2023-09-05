@@ -16,7 +16,7 @@ const effectStack: EffectFn[] = []//用于嵌套的副作用函数栈
 
 type keyType = string | Symbol
 
-class ReactiveEffect {
+export class ReactiveEffect {
     private _fn: Function //真正的副作用函数，
     deps: Set<ReactiveEffect>[]  //(同一个属性的)，副作用函数依赖
     private active// 是否stop标志，如果stop 就不收集依赖
@@ -72,7 +72,9 @@ export function effect(fn: Function, option: Options = {}) {
 
     const _effect = new ReactiveEffect(fn, scheduler)
     _effect.onStop = option.onStop
-    _effect.run()
+    if (!option.lazy) {
+        _effect.run()
+    }
     const runner: Runner = () => _effect.run.bind(_effect)() //将要运行的副作用函数返回，让用户决定副作用函数的执行时机
     runner.effect = _effect
     return runner
@@ -86,8 +88,9 @@ export function stop(runner: Runner) {
 const targetMap = new WeakMap<Object, Map<keyType, Set<ReactiveEffect>>>()//存储对象中属性依赖的副作用函数的桶
 // 收集依赖
 export function track(target: Object, key: keyType) {
-    if (!activeEffect || !shouldTrack)
+    if (!isTracking()) {
         return
+    }
     // target -> key -> deps
     let depsMap = targetMap.get(target)
     if (!depsMap) {
@@ -97,12 +100,20 @@ export function track(target: Object, key: keyType) {
     if (!deps) {
         depsMap.set(key, (deps = new Set()))
     }
+    trackEffects(deps)
+    // activeEffect.
+    // console.log('track',key,deps)
+}
+
+export function isTracking() {
+    return shouldTrack && activeEffect !== undefined
+}
+
+export function trackEffects(deps: Set<ReactiveEffect>) {
     if (deps.has(activeEffect)) //如果已经存在就不收集了
         return;
     deps.add(activeEffect)
     activeEffect.deps.push(deps)
-    // activeEffect.
-    // console.log('track',key,deps)
 }
 
 // 触发依赖
@@ -110,6 +121,10 @@ export function trigger(target: Object, key: keyType) {
     const depsMap = targetMap.get(target)
     if (!depsMap) return
     const deps = depsMap.get(key)
+    triggerEffects(deps)
+}
+
+export function triggerEffects(deps: Set<ReactiveEffect> | undefined) {
     deps && deps.forEach(effectFn => {
         if (effectFn.scheduler) {//如果存在调度器 则在调度器里执行 副作用函数
             effectFn.scheduler(effectFn)
@@ -118,5 +133,4 @@ export function trigger(target: Object, key: keyType) {
         }
     })
 }
-
 
